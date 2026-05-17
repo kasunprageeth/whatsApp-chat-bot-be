@@ -1,34 +1,60 @@
 # Quick Reference - Human Takeover Mode API
 
-## Endpoints Summary
+## Authentication Methods
+
+### Method 1: JWT Bearer Token (Recommended for SaaS)
+```bash
+# Get JWT token from Supabase Auth after user login
+# Include in Authorization header
+curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  http://localhost:3000/api/messages
+```
+
+### Method 2: x-user-id Header (Legacy Support)
+```bash
+# Legacy method - UUID in header
+# Works for development/internal APIs
+curl -H "x-user-id: 550e8400-e29b-41d4-a716-446655440000" \
+  http://localhost:3000/api/messages
+```
+
+**Recommended**: Use JWT for production, x-user-id for development only.
 
 | Endpoint | Method | Purpose | Auth |
 |----------|--------|---------|------|
-| `/messages/takeover` | POST | Enable human takeover | x-user-id |
-| `/messages/release-takeover` | POST | Release back to bot | x-user-id |
-| `/messages/manual-reply` | POST | Send agent message | x-user-id |
-| `/messages/conversation/:number` | GET | Get conversation history | x-user-id |
-| `/messages` | GET | Get all messages | No |
+| `/api/messages/takeover` | POST | Enable human takeover | JWT or x-user-id |
+| `/api/messages/release-takeover` | POST | Release back to bot | JWT or x-user-id |
+| `/api/messages/manual-reply` | POST | Send agent message | JWT or x-user-id |
+| `/api/messages/conversation/:number` | GET | Get conversation history | JWT or x-user-id |
+| `/api/messages` | GET | Get all messages (tenant-isolated) | JWT or x-user-id |
 | `/whatsapp` | POST | WhatsApp webhook | Twilio |
-| `/replies` | GET | Get auto-replies | No |
-| `/replies` | POST | Create auto-reply | No |
+| `/replies` | GET | Get auto-replies | JWT or x-user-id |
+| `/replies` | POST | Create auto-reply | JWT or x-user-id |
 
 ---
 
 ## Quick Examples
 
-### 1. Enable Takeover
+### 1. Enable Takeover (with JWT)
 ```bash
-curl -X POST http://localhost:3000/messages/takeover \
+curl -X POST http://localhost:3000/api/messages/takeover \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"customer_number": "+1234567890"}'
+```
+
+### 1b. Enable Takeover (with x-user-id - legacy)
+```bash
+curl -X POST http://localhost:3000/api/messages/takeover \
   -H "x-user-id: 550e8400-e29b-41d4-a716-446655440000" \
   -H "Content-Type: application/json" \
   -d '{"customer_number": "+1234567890"}'
 ```
 
-### 2. Send Manual Reply
+### 2. Send Manual Reply (with JWT)
 ```bash
-curl -X POST http://localhost:3000/messages/manual-reply \
-  -H "x-user-id: 550e8400-e29b-41d4-a716-446655440000" \
+curl -X POST http://localhost:3000/api/messages/manual-reply \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "customer_number": "+1234567890",
@@ -36,23 +62,24 @@ curl -X POST http://localhost:3000/messages/manual-reply \
   }'
 ```
 
-### 3. Release Takeover
+### 3. Release Takeover (with JWT)
 ```bash
-curl -X POST http://localhost:3000/messages/release-takeover \
-  -H "x-user-id: 550e8400-e29b-41d4-a716-446655440000" \
+curl -X POST http://localhost:3000/api/messages/release-takeover \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"customer_number": "+1234567890"}'
 ```
 
-### 4. Get Conversation
+### 4. Get Conversation (with JWT)
 ```bash
-curl -X GET "http://localhost:3000/messages/conversation/%2B1234567890" \
-  -H "x-user-id: 550e8400-e29b-41d4-a716-446655440000"
+curl -X GET "http://localhost:3000/api/messages/conversation/%2B1234567890" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
-### 5. Get All Messages
+### 5. Get All Messages (with JWT)
 ```bash
-curl -X GET http://localhost:3000/messages
+curl -X GET http://localhost:3000/api/messages \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 ---
@@ -65,7 +92,7 @@ curl -X GET http://localhost:3000/messages
   "success": true,
   "message": "Human takeover enabled",
   "conversation_id": "550e8400-e29b-41d4-a716-446655440001",
-  "takeover_started_at": "2026-05-16T10:00:00Z",
+  "takeover_started_at": "2026-05-17T10:00:00Z",
   "customer_number": "+1234567890"
 }
 ```
