@@ -26,113 +26,108 @@ app.use(bodyParser.json());
  * Updated to handle human takeover mode
  */
 app.post("/whatsapp", async (req, res) => {
+  try {
+    const originalMessage = req.body.Body;
+    const customerNumber = req.body.From;
 
-    try {
+    // Step 1: Check conversation status
+    const { data: conversations, error: convError } = await supabase
+      .from("conversations")
+      .select("*")
+      .eq("customer_number", customerNumber)
+      .limit(1);
 
-        const originalMessage = req.body.Body;
-        const customerNumber = req.body.From;
-        const incomingMessage = originalMessage.toLowerCase();
-
-        // Check if conversation is in human takeover mode
-        const { data: conversations, error: convError } = await supabase
-            .from("conversations")
-            .select("*")
-            .eq("customer_number", customerNumber)
-            .limit(1);
-
-        let inTakeover = false;
-        let userId = null; // Multi-tenant support: capture user_id from conversation
-
-        if (convError) {
-            console.log("Supabase Error checking conversations:", convError);
-        } else if (conversations && conversations.length > 0) {
-            inTakeover = conversations[0].human_takeover === true;
-            userId = conversations[0].user_id; // Capture tenant ID for message storage
-        }
-
-        // CRITICAL: If in takeover mode, DO NOT send automatic response (bot silence)
-        if (inTakeover) {
-            // Save message with takeover flag
-            const { error: saveError } = await supabase
-                .from("messages")
-                .insert([
-                    {
-                        user_id: userId, // Store with tenant ID (multi-tenant)
-                        customer_number: customerNumber,
-                        incoming_message: originalMessage,
-                        bot_reply: "[Waiting for agent response]",
-                        human_takeover: true,
-                        is_manual_reply: false
-                    }
-                ]);
-
-            if (saveError) {
-                console.log("Error saving message during takeover:", saveError);
-            }
-
-            // CRITICAL: Send empty response (bot silence)
-            // ✅ NO automatic message sent to customer during takeover
-            // ✅ Messages are stored but not acknowledged
-            // ✅ Only agent's manual replies are transmitted to customer
-            const twiml = new MessagingResponse();
-            res.writeHead(200, { "Content-Type": "text/xml" });
-            res.end(twiml.toString());
-            return;
-        }
-
-        // Normal bot mode - use auto replies
-        const { data: replies, error } = await supabase
-            .from("auto_replies")
-            .select("*");
-
-        if (error) {
-            console.log("Supabase Error:", error);
-        }
-
-        let reply = "Sorry, I didn't understand.";
-
-        for (const item of replies) {
-
-            const trigger = item.trigger_word.toLowerCase();
-
-            if (incomingMessage.includes(trigger)) {
-
-                reply = item.reply_message;
-
-                console.log("Matched:", reply);
-
-                break;
-            }
-        }
-
-        // SAVE MESSAGE HISTORY (Bot mode)
-        await supabase
-            .from("messages")
-            .insert([
-                {
-                    user_id: userId, // Multi-tenant support: include tenant ID if known
-                    customer_number: customerNumber,
-                    incoming_message: originalMessage,
-                    bot_reply: reply,
-                    human_takeover: false,
-                    is_manual_reply: false
-                }
-            ]);
-
-        const twiml = new MessagingResponse();
-
-        twiml.message(reply);
-
-        res.writeHead(200, { "Content-Type": "text/xml" });
-
-        res.end(twiml.toString());
-
-    } catch (err) {
-
-        console.log(err);
-
-        res.sendStatus(500);
+    if (convError) {
+      console.error("Supabase Error checking conversations:", convError);
+      // Continue anyway - maybe first message
     }
+
+    let inTakeover = false;
+    let userId = null;
+
+    if (conversations && conversations.length > 0) {
+      inTakeover = conversations[0].human_takeover === true;
+      userId = conversations[0].user_id;
+    }
+
+    // Step 2: CRITICAL - If in takeover mode, DO NOT send automatic response
+    if (inTakeover) {
+      // Save message with takeover flag
+      const { error: saveError } = await supabase
+        .from("messages")
+        .insert([
+          {
+            user_id: userId,  // ← We know userId is NOT null (from conversation)
+            customer_number: customerNumber,
+            incoming_message: originalMessage,
+            bot_reply: "[Waiting for agent response]",
+            human_takeover: true,
+            is_manual_reply: false
+          }
+        ]);
+
+      if (saveError) {
+        console.error("Error saving message during takeover:", saveError);
+      }
+
+      // ✅ CRITICAL: Send EMPTY response (bot silence)
+      const twiml = new MessagingResponse();
+      res.writeHead(200, { "Content-Type": "text/xml" });
+      res.end(twiml.toString());
+      return; // ← Important: return early to prevent bot reply
+    }
+
+    // Step 3: Normal bot mode - get auto-replies
+    const { data: replies, error: repliesError } = await supabase
+      .from("auto_replies")
+      .select("*");
+
+    if (repliesError) {
+      console.error("Supabase Error fetching replies:", repliesError);
+    }
+
+    let reply = "Sorry, I didn't understand.";
+    const incomingMessage = originalMessage.toLowerCase();
+
+    for (const item of replies) {
+      const trigger = item.trigger_word.toLowerCase();
+      if (incomingMessage.includes(trigger)) {
+        reply = item.reply_message;
+        console.log("Matched trigger:", trigger, "Reply:", reply);
+        break;
+      }
+    }
+
+    // Step 4: Save message history with bot reply
+    const { error: saveError } = await supabase
+      .from("messages")
+      .insert([
+        {
+          user_id: userId || "00000000-0000-0000-0000-000000000000",  // ← CRITICAL: Use fallback UUID if null
+          customer_number: customerNumber,
+          incoming_message: originalMessage,
+          bot_reply: reply,
+          human_takeover: false,
+          is_manual_reply: false
+        }
+      ]);
+
+    if (saveError) {
+      console.error("Error saving message in bot mode:", saveError);
+      // Still send reply even if save failed
+    }
+
+    // Step 5: Send bot reply to customer
+    const twiml = new MessagingResponse();
+    twiml.message(reply);
+
+    res.writeHead(200, { "Content-Type": "text/xml" });
+    res.end(twiml.toString());
+
+  } catch (err) {
+    console.error("Error in WhatsApp webhook:", err);
+    res.sendStatus(500);
+  }
 });
 
 app.get("/replies", async (req, res) => {
