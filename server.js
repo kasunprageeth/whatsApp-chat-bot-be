@@ -41,19 +41,23 @@ app.post("/whatsapp", async (req, res) => {
             .limit(1);
 
         let inTakeover = false;
+        let userId = null; // Multi-tenant support: capture user_id from conversation
+
         if (convError) {
             console.log("Supabase Error checking conversations:", convError);
         } else if (conversations && conversations.length > 0) {
             inTakeover = conversations[0].human_takeover === true;
+            userId = conversations[0].user_id; // Capture tenant ID for message storage
         }
 
-        // If in takeover mode, DO NOT send automatic response (bot silence)
+        // CRITICAL: If in takeover mode, DO NOT send automatic response (bot silence)
         if (inTakeover) {
             // Save message with takeover flag
             const { error: saveError } = await supabase
                 .from("messages")
                 .insert([
                     {
+                        user_id: userId, // Store with tenant ID (multi-tenant)
                         customer_number: customerNumber,
                         incoming_message: originalMessage,
                         bot_reply: "[Waiting for agent response]",
@@ -63,12 +67,13 @@ app.post("/whatsapp", async (req, res) => {
                 ]);
 
             if (saveError) {
-                console.log("Error saving message:", saveError);
+                console.log("Error saving message during takeover:", saveError);
             }
 
             // CRITICAL: Send empty response (bot silence)
-            // No automatic message sent to customer during takeover
-            // Only agent's manual replies are sent
+            // ✅ NO automatic message sent to customer during takeover
+            // ✅ Messages are stored but not acknowledged
+            // ✅ Only agent's manual replies are transmitted to customer
             const twiml = new MessagingResponse();
             res.writeHead(200, { "Content-Type": "text/xml" });
             res.end(twiml.toString());
@@ -100,11 +105,12 @@ app.post("/whatsapp", async (req, res) => {
             }
         }
 
-        // SAVE MESSAGE HISTORY
+        // SAVE MESSAGE HISTORY (Bot mode)
         await supabase
             .from("messages")
             .insert([
                 {
+                    user_id: userId, // Multi-tenant support: include tenant ID if known
                     customer_number: customerNumber,
                     incoming_message: originalMessage,
                     bot_reply: reply,
