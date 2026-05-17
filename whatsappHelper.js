@@ -42,7 +42,7 @@ async function sendWhatsAppMessage(toNumber, message, fromNumber) {
 async function sendTakeoverActivatedMessage(customerNumber, fromNumber) {
   return sendWhatsAppMessage(
     customerNumber,
-    "Our agent will reply soon. 🤝",
+    "Our team will help you shortly",
     fromNumber
   );
 }

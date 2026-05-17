@@ -217,17 +217,24 @@ The webhook now:
 1. Checks if conversation is in `human_takeover` mode
 2. If YES:
    - Saves message with `human_takeover=true`
-   - Sends: "Message received. Our agent is on the case. 🤝"
-   - Agent sees message in dashboard
+   - **IMPLEMENTS BOT SILENCE** - No automatic message sent
+   - Only agent's manual replies are transmitted to customer
 3. If NO:
    - Uses normal bot auto-reply logic
    - Matches trigger words from `auto_replies` table
 
 #### WhatsApp Notifications
 When status changes, customers receive automatic messages:
-- **Takeover activated**: "Our agent will reply soon. 🤝"
+- **Takeover activated**: "Our team will help you shortly"
 - **Manual reply sent**: Agent's custom message
 - **Takeover released**: "Bot automation resumed. 🤖"
+
+#### Bot Silence During Takeover
+**CRITICAL FEATURE**: While `human_takeover=true`:
+- Bot does NOT send any automatic responses (like "I didn't understand")
+- Messages are saved but no acknowledgment is sent to customer
+- Only agent's manual replies are sent to customer
+- This ensures clean, agent-controlled communication during takeover
 
 ---
 
@@ -333,6 +340,8 @@ curl -X GET "http://localhost:3000/messages/conversation/%2B1234567890" \
 | Validation | All phone numbers validated, messages required |
 | Ownership | Users can only access their own conversations |
 | History | All messages (bot + agent) stored with proper flags |
+| **Bot Silence** | **While in takeover mode, bot sends NO automatic responses** |
+| Bot Resumption | When takeover released, bot auto-replies resume for new messages |
 
 ---
 

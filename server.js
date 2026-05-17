@@ -47,7 +47,7 @@ app.post("/whatsapp", async (req, res) => {
             inTakeover = conversations[0].human_takeover === true;
         }
 
-        // If in takeover mode, notify agent (don't send automatic reply)
+        // If in takeover mode, DO NOT send automatic response (bot silence)
         if (inTakeover) {
             // Save message with takeover flag
             const { error: saveError } = await supabase
@@ -66,9 +66,10 @@ app.post("/whatsapp", async (req, res) => {
                 console.log("Error saving message:", saveError);
             }
 
-            // Send acknowledgment that agent will review
+            // CRITICAL: Send empty response (bot silence)
+            // No automatic message sent to customer during takeover
+            // Only agent's manual replies are sent
             const twiml = new MessagingResponse();
-            twiml.message("Message received. Our agent is on the case. 🤝");
             res.writeHead(200, { "Content-Type": "text/xml" });
             res.end(twiml.toString());
             return;

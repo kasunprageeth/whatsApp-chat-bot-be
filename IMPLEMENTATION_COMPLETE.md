@@ -43,7 +43,8 @@ Added 4 new endpoints:
 POST /messages/takeover
 → Creates conversation entry
 → Sets human_takeover=true
-→ Sends to customer: "Our agent will reply soon. 🤝"
+→ Sends to customer: "Our team will help you shortly"
+→ CRITICAL: Implements bot silence (no auto-responses)
 ```
 
 ### 💬 Manual Replies
@@ -52,6 +53,7 @@ POST /messages/manual-reply
 → Saves message with is_manual_reply=true
 → Sends via WhatsApp API
 → Stores agent_id for attribution
+→ Only agent's custom message sent (no bot involvement)
 ```
 
 ### 🤖 Release Back to Bot
@@ -68,6 +70,16 @@ GET /messages/conversation/:customer_number
 → Returns all messages
 → Shows takeover status
 → Tracks agent involvement
+```
+
+### 🔇 Bot Silence During Takeover
+```
+CRITICAL FEATURE:
+- While human_takeover=true
+- Bot does NOT send any automatic responses
+- No "I didn't understand" messages
+- Only agent's manual replies transmitted
+- Ensures clean, agent-controlled communication
 ```
 
 ---
@@ -88,8 +100,9 @@ Every message now includes:
 
 ### Smart Message Handling
 - **Bot mode**: Messages matched against auto-replies (existing behavior)
-- **Takeover mode**: Messages saved but no auto-reply sent
-- **Manual reply**: Agent message sent directly to customer
+- **Takeover mode**: Messages saved but NO automatic bot responses sent (bot silence)
+- **Manual reply**: Agent message sent directly to customer (no bot involvement)
+- **Release**: Resume normal bot auto-reply for new incoming messages
 
 ---
 
@@ -257,16 +270,26 @@ git push origin main
 The system sends 3 automatic messages via WhatsApp API:
 
 1. **Takeover Activated**
-   - Message: "Our agent will reply soon. 🤝"
+   - Message: "Our team will help you shortly"
    - When: POST /messages/takeover
+   - **Bot Silence Enabled**: No automatic bot responses
 
 2. **Manual Reply**
    - Message: Agent's custom text
    - When: POST /messages/manual-reply
+   - **No Bot Involvement**: Only agent's message sent
 
 3. **Takeover Released**
    - Message: "Bot automation resumed. 🤖"
    - When: POST /messages/release-takeover
+   - **Bot Resumes**: Auto-replies active for new messages
+
+### Critical: Bot Silence Feature
+During takeover mode, the bot is completely silent:
+- No automatic responses to customer messages
+- Messages are saved for agent review
+- Only agent's manual replies are transmitted
+- Ensures professional, controlled agent communication
 
 ---
 
@@ -282,7 +305,7 @@ Check conversations table for human_takeover
 If YES (takeover active)
     ↓
     Save with human_takeover=true
-    Send ack: "Agent is on the case"
+    🔇 BOT SILENCE: No automatic message sent
     ↓
 If NO (bot mode)
     ↓
@@ -296,14 +319,15 @@ Agent wants to take over
     ↓
     Create/update conversation
     Set human_takeover=true
-    Send WhatsApp: "Agent will reply soon"
+    Send WhatsApp: "Our team will help you shortly"
+    🔇 Enable bot silence
     ↓
 Agent sends reply
     ↓
     POST /messages/manual-reply
     ↓
     Save with is_manual_reply=true
-    Send via WhatsApp API
+    Send via WhatsApp API (agent's message only)
     ↓
 Agent releases
     ↓
@@ -311,7 +335,8 @@ Agent releases
     ↓
     Set human_takeover=false
     Resume bot mode
-    Send WhatsApp: "Bot resumed"
+    Send WhatsApp: "Bot automation resumed. 🤖"
+    ✅ Bot silence disabled
 ```
 
 ---

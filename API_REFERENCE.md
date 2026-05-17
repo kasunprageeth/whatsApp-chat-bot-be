@@ -181,11 +181,16 @@ bot_mode
 
 ## WhatsApp Messages Sent
 
-| Event | Message | Emoji |
+| Event | Message | Notes |
 |-------|---------|-------|
-| Takeover enabled | "Our agent will reply soon." | 🤝 |
-| Manual reply sent | Agent's message | N/A |
-| Takeover released | "Bot automation resumed." | 🤖 |
+| Takeover enabled | "Our team will help you shortly" | Customer receives this message |
+| Manual reply sent | Agent's message | Agent's custom text, no bot involvement |
+| Takeover released | "Bot automation resumed. 🤖" | Bot auto-replies resume for new messages |
+
+### Bot Silence Feature
+- During takeover mode: **NO automatic bot responses** (like "I didn't understand")
+- Messages are saved but customer only receives agent's manual replies
+- Ensures clean, agent-controlled communication
 
 ---
 
