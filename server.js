@@ -28,7 +28,13 @@ app.use(bodyParser.json());
 app.post("/whatsapp", async (req, res) => {
   try {
     const originalMessage = req.body.Body;
-    const customerNumber = req.body.From;
+    let customerNumber = req.body.From;
+    
+    // Normalize customer number: remove 'whatsapp:' prefix if present
+    if (customerNumber.startsWith("whatsapp:")) {
+      customerNumber = customerNumber.replace("whatsapp:", "");
+    }
+    console.log(`📱 Incoming message from: ${customerNumber} | Message: "${originalMessage}"`);
 
     // Step 1: Check conversation status
     const { data: conversations, error: convError } = await supabase
@@ -123,7 +129,8 @@ app.post("/whatsapp", async (req, res) => {
       console.error("Error saving message in bot mode:", saveError);
       // Still send reply even if save failed
     } else {
-      console.log(`✓ Message saved | customer: ${customerNumber} | user_id: ${userId || "NULL"} | reply: ${reply}`);
+      const userIdStatus = userId ? `✓ user_id: ${userId}` : `⚠ user_id: NULL (new customer)`;
+      console.log(`✓ Message saved | customer: ${customerNumber} | ${userIdStatus} | reply: "${reply}"`);
     }
 
     // Step 5: Send bot reply to customer
@@ -639,7 +646,12 @@ app.post("/messages/manual-reply", authMiddleware, async (req, res) => {
 app.get("/messages/conversation/:customer_number", authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
-    const { customer_number } = req.params;
+    let { customer_number } = req.params;
+    
+    // Normalize customer number: remove 'whatsapp:' prefix if present
+    if (customer_number.startsWith("whatsapp:")) {
+      customer_number = customer_number.replace("whatsapp:", "");
+    }
 
     // Validate phone number
     if (!validators.isValidPhoneNumber(customer_number)) {
