@@ -48,6 +48,9 @@ app.post("/whatsapp", async (req, res) => {
     if (conversations && conversations.length > 0) {
       inTakeover = conversations[0].human_takeover === true;
       userId = conversations[0].user_id;
+      console.log(`✓ Conversation found for ${customerNumber} | user_id: ${userId} | takeover: ${inTakeover}`);
+    } else {
+      console.log(`⚠ No conversation for ${customerNumber} (new customer) | user_id will be NULL`);
     }
 
     // Step 2: CRITICAL - If in takeover mode, DO NOT send automatic response
@@ -68,6 +71,8 @@ app.post("/whatsapp", async (req, res) => {
 
       if (saveError) {
         console.error("Error saving message during takeover:", saveError);
+      } else {
+        console.log(`✓ Takeover mode: Message saved (bot silent) | customer: ${customerNumber} | user_id: ${userId}`);
       }
 
       // ✅ CRITICAL: Send EMPTY response (bot silence)
@@ -99,11 +104,13 @@ app.post("/whatsapp", async (req, res) => {
     }
 
     // Step 4: Save message history with bot reply
+    // Note: user_id will be NULL if no conversation exists yet (message from new customer)
+    // Conversations should be created via /messages/takeover endpoint before proper multi-tenant isolation
     const { error: saveError } = await supabase
       .from("messages")
       .insert([
         {
-          user_id: userId || "00000000-0000-0000-0000-000000000000",  // ← CRITICAL: Use fallback UUID if null
+          user_id: userId,  // Will be null for new customers (no conversation created yet)
           customer_number: customerNumber,
           incoming_message: originalMessage,
           bot_reply: reply,
@@ -115,6 +122,8 @@ app.post("/whatsapp", async (req, res) => {
     if (saveError) {
       console.error("Error saving message in bot mode:", saveError);
       // Still send reply even if save failed
+    } else {
+      console.log(`✓ Message saved | customer: ${customerNumber} | user_id: ${userId || "NULL"} | reply: ${reply}`);
     }
 
     // Step 5: Send bot reply to customer
@@ -473,6 +482,7 @@ app.post("/messages/release-takeover", authMiddleware, async (req, res) => {
       .from("messages")
       .insert([
         {
+          user_id: userId,  // Include user_id for system messages too
           customer_number,
           incoming_message: "[System]",
           bot_reply: "[Human takeover ended - Bot mode resumed]",
